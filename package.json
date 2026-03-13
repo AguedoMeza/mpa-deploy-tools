@@ -1,0 +1,17 @@
+{
+  "name": "mpa-deploy-tools",
+  "version": "1.0.0",
+  "description": "Build agent y deploy watcher para monorepos MPA en IIS/Windows Server",
+  "main": "build-agent.js",
+  "scripts": {
+    "test": "node build-agent.js"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.16.2",
+    "archiver": "^7.0.1",
+    "dotenv": "^16.4.5",
+    "js-yaml": "^4.1.0",
+    "node-fetch": "^2.7.0",
+    "simple-git": "^3.27.0"
+  }
+}
