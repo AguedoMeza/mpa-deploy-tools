@@ -126,7 +126,7 @@ def main() -> None:
         print(f"ERROR: {CONFIG_FILE} no encontrado")
         sys.exit(1)
 
-    watcher_cfg = yaml.safe_load(CONFIG_FILE.read_text())
+    watcher_cfg = yaml.safe_load(CONFIG_FILE.read_text(encoding='utf-8-sig'))
 
     # Cargar credenciales desde .env del servidor
     credentials_env = watcher_cfg.get("credentials_env")
@@ -148,7 +148,7 @@ def main() -> None:
             if not os.path.exists(config_path):
                 logging.warning(f"deploy.config.yml no encontrado: {config_path}")
                 continue
-            project_cfg = yaml.safe_load(Path(config_path).read_text())
+            project_cfg = yaml.safe_load(Path(config_path).read_text(encoding='utf-8-sig'))
             check_project(project_cfg)
 
         time.sleep(interval)
