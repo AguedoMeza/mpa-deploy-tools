@@ -144,33 +144,30 @@ def deploy_frontend(config: dict, version: str, build_entry: dict, tmp_dir: str)
                 prev_target = line.split(":", 1)[1].strip()
                 break
 
-    # 5. Parar App Pool → swap junction → iniciar App Pool
-    logger.info(f"[FRONTEND] Parando App Pool '{app_pool}'")
-    _apppool("stop", app_pool)
-
+    # 5. Swap junction (archivos estáticos no requieren reinicio de App Pool)
     try:
         _swap_junction(junction_path, release_path)
     except Exception as e:
         logger.error(f"[FRONTEND] Error en junction: {e} — revirtiendo")
         if prev_target:
             _swap_junction(junction_path, prev_target)
-        _apppool("start", app_pool)
         return False
 
-    logger.info(f"[FRONTEND] Iniciando App Pool '{app_pool}'")
-    _apppool("start", app_pool)
+    # 6. Reciclar App Pool solo si está configurado explícitamente
+    if app_pool:
+        logger.info(f"[FRONTEND] Reciclando App Pool '{app_pool}'")
+        subprocess.run([APPCMD, "recycle", "apppool", f"/apppool.name:{app_pool}"],
+                       capture_output=True)
 
-    # 6. Health check
+    # 7. Health check
     logger.info(f"[FRONTEND] Health check: {hc_url}")
     if _health_check(hc_url, hc_timeout):
         logger.info(f"[FRONTEND] ✓ Deploy exitoso: {version}")
         _purge_old_releases(releases_dir, keep)
         return True
 
-    # 7. Rollback automático
+    # 8. Rollback automático
     logger.error(f"[FRONTEND] Health check fallido — rollback a {prev_target}")
-    _apppool("stop", app_pool)
     if prev_target:
         _swap_junction(junction_path, prev_target)
-    _apppool("start", app_pool)
     return False
