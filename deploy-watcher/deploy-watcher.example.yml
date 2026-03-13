@@ -1,0 +1,8 @@
+poll_interval_seconds: 30
+log_dir: 'C:\deploy-watcher\logs'
+credentials_env: 'C:\deploy-watcher\.env'
+
+projects:
+  - config: 'C:\inetpub\repos\app-legal-filling\deploy.config.yml'
+  # agregar una línea por cada repo nuevo:
+  # - config: 'C:\inetpub\repos\mpa-webapp-caf\deploy.config.yml'
