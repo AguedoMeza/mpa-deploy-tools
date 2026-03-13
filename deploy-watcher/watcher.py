@@ -6,7 +6,7 @@ y dispara deploys de frontend y/o backend según cambios en manifest.json.
 
 Instalación como servicio Windows:
     nssm install mpa-deploy-watcher python watcher.py
-    nssm set mpa-deploy-watcher AppDirectory C:\deploy-watcher
+    nssm set mpa-deploy-watcher AppDirectory C:/deploy-watcher
     nssm set mpa-deploy-watcher AppEnvironmentExtra PYTHONUNBUFFERED=1
     nssm start mpa-deploy-watcher
 """
