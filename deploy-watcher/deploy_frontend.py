@@ -21,15 +21,19 @@ logger = logging.getLogger(__name__)
 
 # ── IIS App Pool ──────────────────────────────────────────────────────────────
 
+APPCMD = r"C:\Windows\System32\inetsrv\appcmd.exe"
+
 def _apppool(action: str, name: str) -> None:
-    """Inicia, detiene o recicla un App Pool de IIS via PowerShell."""
-    verbs = {"stop": "Stop-WebAppPool", "start": "Start-WebAppPool"}
-    cmd = verbs[action]
-    subprocess.run(
-        ["powershell", "-Command", f'{cmd} -Name "{name}"'],
-        check=True, capture_output=True
+    """Inicia o detiene un App Pool de IIS via appcmd.exe (sin módulos PS)."""
+    result = subprocess.run(
+        [APPCMD, action, "apppool", f"/apppool.name:{name}"],
+        capture_output=True, text=True
     )
-    logger.info(f"App Pool '{name}' → {action}")
+    # appcmd devuelve exit 1 si el pool ya está en el estado pedido — lo ignoramos
+    if result.returncode not in (0, 1):
+        raise subprocess.CalledProcessError(result.returncode,
+              result.args, result.stdout, result.stderr)
+    logger.info(f"App Pool '{name}' → {action} (rc={result.returncode})")
 
 
 # ── Directory Junction ────────────────────────────────────────────────────────
