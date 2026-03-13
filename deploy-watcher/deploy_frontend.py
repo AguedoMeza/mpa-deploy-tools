@@ -49,7 +49,7 @@ def _swap_junction(junction: str, target: str) -> None:
         ["cmd", "/c", "mklink", "/J", junction, target],
         check=True, capture_output=True
     )
-    logger.info(f"Junction: {junction} → {target}")
+    logger.info(f"Junction: {junction} -> {target}")
 
 
 # ── SHA-256 ───────────────────────────────────────────────────────────────────
@@ -102,8 +102,8 @@ def deploy_frontend(config: dict, version: str, build_entry: dict, tmp_dir: str)
     inetpub   = srv["inetpub_path"]          # C:\inetpub\wwwroot\app-legal-filling
     app_pool  = srv["app_pool"]
     keep      = srv.get("keep_releases", 5)
-    hc_url    = srv["health_check"]["url"]
-    hc_timeout = srv["health_check"].get("timeout_seconds", 10)
+    hc_url    = srv.get("health_check", {}).get("url", "")
+    hc_timeout = srv.get("health_check", {}).get("timeout_seconds", 10)
 
     releases_dir  = os.path.join(inetpub, "releases")
     junction_path = os.path.join(inetpub, "current")
@@ -159,15 +159,20 @@ def deploy_frontend(config: dict, version: str, build_entry: dict, tmp_dir: str)
         subprocess.run([APPCMD, "recycle", "apppool", f"/apppool.name:{app_pool}"],
                        capture_output=True)
 
-    # 7. Health check
-    logger.info(f"[FRONTEND] Health check: {hc_url}")
-    if _health_check(hc_url, hc_timeout):
-        logger.info(f"[FRONTEND] ✓ Deploy exitoso: {version}")
+    # 7. Health check (opcional — si no hay URL configurada se omite)
+    if not hc_url:
+        logger.info(f"[FRONTEND] Deploy exitoso (sin health check): {version}")
         _purge_old_releases(releases_dir, keep)
         return True
 
-    # 8. Rollback automático
-    logger.error(f"[FRONTEND] Health check fallido — rollback a {prev_target}")
+    logger.info(f"[FRONTEND] Health check: {hc_url}")
+    if _health_check(hc_url, hc_timeout):
+        logger.info(f"[FRONTEND] Deploy exitoso: {version}")
+        _purge_old_releases(releases_dir, keep)
+        return True
+
+    # 8. Rollback automatico
+    logger.error(f"[FRONTEND] Health check fallido - rollback a {prev_target}")
     if prev_target:
         _swap_junction(junction_path, prev_target)
     return False
