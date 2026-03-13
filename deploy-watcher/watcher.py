@@ -45,7 +45,9 @@ def setup_logging(log_dir: str) -> None:
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.addHandler(handler)
-    root.addHandler(logging.StreamHandler(sys.stdout))
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.stream = open(sys.stdout.fileno(), mode='w', encoding='utf-8', errors='replace', closefd=False)
+    root.addHandler(stdout_handler)
 
 
 # ── State ─────────────────────────────────────────────────────────────────────
