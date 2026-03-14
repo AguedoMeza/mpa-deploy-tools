@@ -97,23 +97,24 @@ def deploy_frontend(config: dict, version: str, build_entry: dict, tmp_dir: str)
     """
     Despliega una nueva versión del frontend.
     Retorna True si fue exitoso, False si se hizo rollback.
+
+    deploy_mode:
+      junction (default) — swap atómico via Directory Junction, zero-downtime.
+      replace            — reemplaza el contenido de inetpub_path directamente.
+                           IIS toma los archivos estáticos sin reinicio.
     """
-    srv       = config["deploy"]["server"]["frontend"]
-    inetpub   = srv["inetpub_path"]          # C:\inetpub\wwwroot\app-legal-filling
-    app_pool  = srv["app_pool"]
-    keep      = srv.get("keep_releases", 5)
-    hc_url    = srv.get("health_check", {}).get("url", "")
+    srv        = config["deploy"]["server"]["frontend"]
+    inetpub    = srv["inetpub_path"]
+    app_pool   = srv.get("app_pool", "")
+    keep       = srv.get("keep_releases", 5)
+    hc_url     = srv.get("health_check", {}).get("url", "")
     hc_timeout = srv.get("health_check", {}).get("timeout_seconds", 10)
+    mode       = srv.get("deploy_mode", "junction")
 
-    releases_dir  = os.path.join(inetpub, "releases")
-    junction_path = os.path.join(inetpub, "current")
-    release_path  = os.path.join(releases_dir, version)
-
-    os.makedirs(releases_dir, exist_ok=True)
     os.makedirs(tmp_dir, exist_ok=True)
 
     # 1. Descargar ZIP desde SharePoint
-    sp_path  = build_entry["path"]  # e.g. "app-legal-filling/builds/v1.zip"
+    sp_path  = build_entry["path"]
     zip_path = os.path.join(tmp_dir, f"{version}.zip")
 
     logger.info(f"[FRONTEND] Descargando {sp_path}")
@@ -126,15 +127,86 @@ def deploy_frontend(config: dict, version: str, build_entry: dict, tmp_dir: str)
         raise ValueError(f"SHA-256 no coincide: expected={expected} actual={actual}")
     logger.info(f"[FRONTEND] SHA-256 OK: {actual[:16]}...")
 
-    # 3. Extraer a releases/{version}/
+    if mode == "replace":
+        return _deploy_replace(inetpub, zip_path, version, app_pool, hc_url, hc_timeout)
+    else:
+        return _deploy_junction(inetpub, zip_path, version, app_pool, keep, hc_url, hc_timeout)
+
+
+def _deploy_replace(inetpub: str, zip_path: str, version: str,
+                    app_pool: str, hc_url: str, hc_timeout: int) -> bool:
+    """Reemplaza el contenido de inetpub_path directamente con el nuevo build."""
+
+    backup_path = inetpub + f"._backup_{version}"
+
+    # 1. Backup del contenido actual para rollback
+    if os.path.isdir(inetpub):
+        shutil.copytree(inetpub, backup_path, dirs_exist_ok=False)
+
+    try:
+        # 2. Limpiar destino y extraer nuevo build
+        if os.path.isdir(inetpub):
+            shutil.rmtree(inetpub)
+        os.makedirs(inetpub)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(inetpub)
+        logger.info(f"[FRONTEND] Contenido reemplazado en {inetpub}")
+    except Exception as e:
+        logger.error(f"[FRONTEND] Error al reemplazar: {e} — revirtiendo")
+        if os.path.isdir(backup_path):
+            shutil.rmtree(inetpub, ignore_errors=True)
+            shutil.copytree(backup_path, inetpub)
+        return False
+
+    # 3. Reciclar App Pool si está configurado
+    if app_pool:
+        logger.info(f"[FRONTEND] Reciclando App Pool '{app_pool}'")
+        subprocess.run([APPCMD, "recycle", "apppool", f"/apppool.name:{app_pool}"],
+                       capture_output=True)
+
+    # 4. Health check
+    if not hc_url:
+        logger.info(f"[FRONTEND] Deploy exitoso (sin health check): {version}")
+        _cleanup_backup(backup_path)
+        return True
+
+    logger.info(f"[FRONTEND] Health check: {hc_url}")
+    if _health_check(hc_url, hc_timeout):
+        logger.info(f"[FRONTEND] Deploy exitoso: {version}")
+        _cleanup_backup(backup_path)
+        return True
+
+    # 5. Rollback automático
+    logger.error(f"[FRONTEND] Health check fallido — rollback")
+    shutil.rmtree(inetpub, ignore_errors=True)
+    if os.path.isdir(backup_path):
+        shutil.copytree(backup_path, inetpub)
+    return False
+
+
+def _cleanup_backup(backup_path: str) -> None:
+    if os.path.isdir(backup_path):
+        shutil.rmtree(backup_path, ignore_errors=True)
+
+
+def _deploy_junction(inetpub: str, zip_path: str, version: str, app_pool: str,
+                     keep: int, hc_url: str, hc_timeout: int) -> bool:
+    """Swap atómico via Directory Junction. Zero-downtime."""
+
+    releases_dir  = os.path.join(inetpub, "releases")
+    junction_path = os.path.join(inetpub, "current")
+    release_path  = os.path.join(releases_dir, version)
+
+    os.makedirs(releases_dir, exist_ok=True)
+
+    # 1. Extraer a releases/{version}/
     logger.info(f"[FRONTEND] Extrayendo a {release_path}")
     with zipfile.ZipFile(zip_path, "r") as zf:
         zf.extractall(release_path)
 
-    # 4. Guardar versión anterior para rollback
-    prev_target = os.readlink(junction_path) if os.path.islink(junction_path) else None
-    if os.path.exists(junction_path) and not os.path.islink(junction_path):
-        # Junction en Windows: os.readlink puede fallar — obtenemos target vía cmd
+    # 2. Guardar target anterior para rollback
+    prev_target = None
+    if os.path.exists(junction_path):
         result = subprocess.run(
             ["cmd", "/c", "fsutil", "reparsepoint", "query", junction_path],
             capture_output=True, text=True
@@ -144,7 +216,7 @@ def deploy_frontend(config: dict, version: str, build_entry: dict, tmp_dir: str)
                 prev_target = line.split(":", 1)[1].strip()
                 break
 
-    # 5. Swap junction (archivos estáticos no requieren reinicio de App Pool)
+    # 3. Swap junction
     try:
         _swap_junction(junction_path, release_path)
     except Exception as e:
@@ -153,13 +225,13 @@ def deploy_frontend(config: dict, version: str, build_entry: dict, tmp_dir: str)
             _swap_junction(junction_path, prev_target)
         return False
 
-    # 6. Reciclar App Pool solo si está configurado explícitamente
+    # 4. Reciclar App Pool si está configurado
     if app_pool:
         logger.info(f"[FRONTEND] Reciclando App Pool '{app_pool}'")
         subprocess.run([APPCMD, "recycle", "apppool", f"/apppool.name:{app_pool}"],
                        capture_output=True)
 
-    # 7. Health check (opcional — si no hay URL configurada se omite)
+    # 5. Health check
     if not hc_url:
         logger.info(f"[FRONTEND] Deploy exitoso (sin health check): {version}")
         _purge_old_releases(releases_dir, keep)
@@ -171,8 +243,8 @@ def deploy_frontend(config: dict, version: str, build_entry: dict, tmp_dir: str)
         _purge_old_releases(releases_dir, keep)
         return True
 
-    # 8. Rollback automatico
-    logger.error(f"[FRONTEND] Health check fallido - rollback a {prev_target}")
+    # 6. Rollback automático
+    logger.error(f"[FRONTEND] Health check fallido — rollback a {prev_target}")
     if prev_target:
         _swap_junction(junction_path, prev_target)
     return False
