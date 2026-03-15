@@ -171,6 +171,67 @@ git push
 
 ---
 
+## Troubleshooting
+
+### GitHub bloquea el push por "secret detected"
+
+Ocurre cuando un commit nuevo contiene un token embebido (por ejemplo en `package.json` o `package-lock.json`). Solución: limpiar el historial con `git filter-repo`.
+
+```bash
+# Instalar (una sola vez)
+pipx install git-filter-repo
+export PATH="$PATH:/home/$USER/.local/bin"
+
+# Reemplazar el token en todo el historial
+git filter-repo --replace-text <(echo "TU_TOKEN==>REDACTED") --force
+
+# Restaurar el remote (filter-repo lo elimina)
+git remote add origin https://github.com/ORG/REPO.git
+git push --force
+```
+
+> **Causa común:** `npm init -y` en un repo cuyo git remote tiene token embebido (`https://TOKEN@github.com/...`) copia el token al campo `repository.url` de `package.json`. El comando `init.js` detecta y limpia esto automáticamente.
+
+---
+
+### El primer `git push` pide usuario y contraseña
+
+Solo ocurre una vez por máquina. Configura el credential store para que no vuelva a pedirlo:
+
+```bash
+git config --global credential.helper store
+git push  # ingresa usuario y token una vez — queda guardado
+```
+
+Cuando pida contraseña, ingresa el **token de GitHub** (no tu contraseña).
+
+---
+
+### `node: command not found` en el hook
+
+Ocurre si NVM no está en el PATH cuando git ejecuta el hook. El comando `init.js` crea `~/.config/husky/init.sh` que carga NVM automáticamente. Si el problema persiste, verifica:
+
+```bash
+cat ~/.config/husky/init.sh
+# Debe contener:
+# export NVM_DIR="$HOME/.nvm"
+# [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+```
+
+---
+
+### El hook no dispara al hacer `git push`
+
+Verifica que el hook sea `pre-push` (no `post-push` — no es un hook válido de git):
+
+```bash
+cat .husky/pre-push        # debe decir: npm run prepush
+grep prepush package.json  # debe existir el script
+node node_modules/mpa-deploy-tools/init.js --check
+```
+
+---
+
 ## Versiones de artefactos
 
 Formato: `YYYYMMDD_HHMMSS_shortSHA` — ejemplo: `20260314_162824_0a86138`
