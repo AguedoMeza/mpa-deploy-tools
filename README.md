@@ -21,6 +21,9 @@ git push → build → SharePoint → watcher → IIS
 ## Onboarding de un repo nuevo
 
 ```bash
+# Si el repo no tiene package.json en la raíz, créalo primero
+npm init -y
+
 npm install --save-dev husky github:AguedoMeza/mpa-deploy-tools#main
 node node_modules/mpa-deploy-tools/init.js
 ```

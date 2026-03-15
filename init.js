@@ -93,7 +93,37 @@ function checkHuskyInitSh() {
 }
 
 
-// ── 2. Scripts en package.json ────────────────────────────────────────────────
+// ── 2. Limpiar token del repository.url en package.json ──────────────────────
+
+function checkRepoUrl() {
+  section('package.json repository.url')
+
+  const pkgPath = path.join(REPO_ROOT, 'package.json')
+  if (!fs.existsSync(pkgPath)) return
+
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
+  const url = pkg?.repository?.url || ''
+
+  // Detectar token embebido (ghp_, ghs_, github_pat_, etc.)
+  if (!/https?:\/\/[^@]*@/.test(url)) {
+    ok('repository.url — sin token')
+    return
+  }
+
+  fail('repository.url contiene credenciales embebidas')
+  info(`→ URL actual: ${url}`)
+
+  if (!CHECK_ONLY) {
+    pkg.repository.url = url.replace(/https?:\/\/[^@]*@/, 'https://')
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8')
+    ok(`repository.url limpiado: ${pkg.repository.url}`)
+  } else {
+    info('→ Ejecuta sin --check para limpiarlo automáticamente')
+  }
+}
+
+
+// ── 3. Scripts en package.json ────────────────────────────────────────────────
 
 function checkPackageScripts() {
   section('Scripts en package.json')
@@ -120,7 +150,32 @@ function checkPackageScripts() {
 }
 
 
-// ── 3. Hook pre-push portable ─────────────────────────────────────────────────
+// ── 3. Hook pre-commit (limpia el default de husky init) ─────────────────────
+
+function checkPreCommitHook() {
+  section('Hook .husky/pre-commit')
+
+  const hookPath = path.join(REPO_ROOT, '.husky', 'pre-commit')
+  if (!fs.existsSync(hookPath)) {
+    ok('pre-commit no existe — ok')
+    return
+  }
+
+  const current = fs.readFileSync(hookPath, 'utf-8')
+  if (current.includes('npm test')) {
+    fail('.husky/pre-commit corre "npm test" — bloquea commits si no hay tests')
+    info('→ Eliminando hook pre-commit generado por husky init')
+    if (!CHECK_ONLY) {
+      fs.unlinkSync(hookPath)
+      ok('pre-commit eliminado')
+    }
+  } else {
+    ok('.husky/pre-commit — ok')
+  }
+}
+
+
+// ── 4. Hook pre-push portable ─────────────────────────────────────────────────
 
 function checkPrePushHook() {
   section('Hook .husky/pre-push')
@@ -247,7 +302,9 @@ console.log(`Repo: ${REPO_ROOT}\n`)
 
 checkHusky()
 checkHuskyInitSh()
+checkRepoUrl()
 checkPackageScripts()
+checkPreCommitHook()
 checkPrePushHook()
 checkDeployConfig()
 checkEnvVars()
