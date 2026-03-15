@@ -130,6 +130,7 @@ function checkPackageScripts() {
 
   const pkgPath = path.join(REPO_ROOT, 'package.json')
   const required = {
+    precommit:        'node node_modules/mpa-deploy-tools/init.js --check',
     prepush:          'node node_modules/mpa-deploy-tools/build-agent.js',
     'deploy:dry-run': 'node node_modules/mpa-deploy-tools/build-agent.js',
   }
@@ -137,6 +138,14 @@ function checkPackageScripts() {
   patchJson(pkgPath, (pkg) => {
     pkg.scripts = pkg.scripts || {}
     let changed = false
+
+    // Reemplazar test placeholder de npm init -y
+    if (pkg.scripts.test && pkg.scripts.test.includes('no test specified')) {
+      pkg.scripts.test = 'node node_modules/mpa-deploy-tools/init.js --check'
+      changed = true
+      ok('script "test" — reemplazado placeholder por init --check')
+    }
+
     for (const [name, cmd] of Object.entries(required)) {
       if (!pkg.scripts[name]) {
         pkg.scripts[name] = cmd
@@ -150,28 +159,31 @@ function checkPackageScripts() {
 }
 
 
-// ── 3. Hook pre-commit (limpia el default de husky init) ─────────────────────
+// ── 3. Hook pre-commit ────────────────────────────────────────────────────────
 
 function checkPreCommitHook() {
   section('Hook .husky/pre-commit')
 
   const hookPath = path.join(REPO_ROOT, '.husky', 'pre-commit')
-  if (!fs.existsSync(hookPath)) {
-    ok('pre-commit no existe — ok')
-    return
+  const expected = 'npm run precommit\n'
+
+  if (fs.existsSync(hookPath)) {
+    const current = fs.readFileSync(hookPath, 'utf-8')
+    if (current.includes('npm run precommit')) {
+      ok('.husky/pre-commit — portable ✔')
+      return
+    }
+    if (current.includes('npm test')) {
+      fail('.husky/pre-commit corre "npm test" directamente — no portable')
+      info('→ Reemplazando con "npm run precommit"')
+    } else {
+      warn('.husky/pre-commit existe pero no llama npm run precommit')
+      info(`→ Contenido actual: ${current.trim()}`)
+    }
   }
 
-  const current = fs.readFileSync(hookPath, 'utf-8')
-  if (current.includes('npm test')) {
-    fail('.husky/pre-commit corre "npm test" — bloquea commits si no hay tests')
-    info('→ Eliminando hook pre-commit generado por husky init')
-    if (!CHECK_ONLY) {
-      fs.unlinkSync(hookPath)
-      ok('pre-commit eliminado')
-    }
-  } else {
-    ok('.husky/pre-commit — ok')
-  }
+  write(hookPath, expected)
+  if (!CHECK_ONLY && fs.existsSync(hookPath)) fs.chmodSync(hookPath, 0o755)
 }
 
 
