@@ -1,0 +1,62 @@
+sequenceDiagram
+    participant Dev as Developer (WSL)
+    participant Git as GitHub
+    participant Agent as build-agent.js
+    participant SP as SharePoint
+    participant Watcher as deploy-watcher (Windows Service)
+    participant IIS as IIS / App Pool
+
+    Dev->>Git: 1. git push
+    activate Agent
+    Note over Dev,Agent: 2. pre-push hook dispara build-agent.js
+
+    Agent->>Agent: 3. Lee deploy.config.yml
+    Agent->>Agent: 4. git diff HEAD~1..HEAD<br/>detecta cambios en frontend/ o backend/
+
+    alt Frontend cambió
+        Agent->>Agent: 5. npm run build
+        Agent->>Agent: 6. ZIP + SHA-256
+        Agent->>SP: 7. Sube build ZIP
+        Agent->>SP: 8. Actualiza manifest.json<br/>latest = nueva versión
+    else Sin cambios relevantes
+        Agent->>Agent: 5. skipping
+    end
+    deactivate Agent
+
+    Git-->>Dev: 9. push completado
+
+    loop Cada 30s
+        Watcher->>SP: 10. GET manifest.json
+        SP-->>Watcher: 11. { latest, builds[] }
+
+        alt Nueva versión detectada
+            Watcher->>SP: 12. Descarga ZIP
+            Watcher->>Watcher: 13. Valida SHA-256
+
+            alt deploy_mode: replace
+                Watcher->>Watcher: 14a. Backup de inetpub_path
+                Watcher->>IIS: 15a. Limpia y extrae ZIP en inetpub_path
+                IIS-->>Watcher: Archivos reemplazados
+            else deploy_mode: junction
+                Watcher->>Watcher: 14b. Extrae ZIP en releases/{version}
+                Watcher->>IIS: 15b. Swap Directory Junction<br/>current → releases/{version}
+            end
+
+            opt App Pool configurado
+                Watcher->>IIS: 16. appcmd recycle apppool
+            end
+
+            opt Health check configurado
+                Watcher->>IIS: 17. GET health check URL
+                alt OK (200)
+                    Watcher->>Watcher: 18. Limpia backup / purga releases viejos
+                    Note over Watcher: ✓ Deploy exitoso
+                else Falla
+                    Watcher->>IIS: 18. Rollback (restaura backup o junction anterior)
+                    Note over Watcher: ✗ Rollback automático
+                end
+            end
+
+            Watcher->>Watcher: 19. Guarda estado (versión deployada)
+        end
+    end
