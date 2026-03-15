@@ -110,7 +110,6 @@ function checkRepoUrl() {
     return
   }
 
-  fail('repository.url contiene credenciales embebidas')
   info(`→ URL actual: ${url}`)
 
   if (!CHECK_ONLY) {
@@ -118,6 +117,7 @@ function checkRepoUrl() {
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8')
     ok(`repository.url limpiado: ${pkg.repository.url}`)
   } else {
+    fail('repository.url contiene credenciales embebidas')
     info('→ Ejecuta sin --check para limpiarlo automáticamente')
   }
 }
