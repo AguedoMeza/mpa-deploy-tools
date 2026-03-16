@@ -68,12 +68,12 @@ def deploy_backend(config: dict, commit: str) -> bool:
 
     # 4. Health check (opcional)
     if not hc_url:
-        logger.info(f"[BACKEND] ✓ Deploy exitoso (sin health check): commit {commit}")
+        logger.info(f"[BACKEND] Deploy exitoso (sin health check): commit {commit}")
         return True
 
     logger.info(f"[BACKEND] Health check: {hc_url}")
     if _health_check(hc_url, hc_timeout):
-        logger.info(f"[BACKEND] ✓ Deploy exitoso: commit {commit}")
+        logger.info(f"[BACKEND] Deploy exitoso: commit {commit}")
         return True
 
     # 5. Rollback automático
