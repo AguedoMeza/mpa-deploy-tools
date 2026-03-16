@@ -142,10 +142,15 @@ Para agregar una app nueva al watcher: añade una línea en `projects` y ejecuta
 
 ### Permisos de git en el servidor
 
-El watcher corre como `SYSTEM` (NSSM) pero los repos suelen ser propiedad del usuario que los clonó. Git bloqueará el `git pull` si los owners no coinciden. Ejecuta una vez en el servidor:
+El watcher corre como `SYSTEM` (NSSM) pero los repos suelen ser propiedad del usuario que los clonó. Git bloqueará el `git pull` si los owners no coinciden.
+
+`git config --global` no sirve aquí porque `SYSTEM` tiene su propio gitconfig en una ruta diferente. Ejecuta como **Administrador** en PowerShell:
 
 ```powershell
-git config --global --add safe.directory *
+git config --file "C:\Windows\System32\config\systemprofile\.gitconfig" --add safe.directory *
+
+# Verificar que quedó aplicado:
+Get-Content "C:\Windows\System32\config\systemprofile\.gitconfig"
 ```
 
 ### Actualizar el watcher tras cambios en este repo

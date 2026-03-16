@@ -130,7 +130,7 @@ function checkPackageScripts() {
 
   const pkgPath = path.join(REPO_ROOT, 'package.json')
   const required = {
-    precommit:        'node node_modules/mpa-deploy-tools/init.js --check',
+    precommit:        'echo "pre-commit ok"',   // placeholder — reemplazar con lint/format del proyecto
     prepush:          'node node_modules/mpa-deploy-tools/build-agent.js',
     'deploy:dry-run': 'node node_modules/mpa-deploy-tools/build-agent.js',
   }
@@ -141,9 +141,17 @@ function checkPackageScripts() {
 
     // Reemplazar test placeholder de npm init -y
     if (pkg.scripts.test && pkg.scripts.test.includes('no test specified')) {
-      pkg.scripts.test = 'node node_modules/mpa-deploy-tools/init.js --check'
+      pkg.scripts.test = 'echo "no tests configured"'
       changed = true
-      ok('script "test" — reemplazado placeholder por init --check')
+      ok('script "test" — reemplazado placeholder')
+    }
+
+    // Valor obsoleto: init.js --check no debe correr en cada commit
+    const obsoletePrecommit = 'node node_modules/mpa-deploy-tools/init.js --check'
+    if (pkg.scripts.precommit === obsoletePrecommit) {
+      pkg.scripts.precommit = required.precommit
+      changed = true
+      ok('script "precommit" — corregido (era init.js --check, ahora es no-op)')
     }
 
     for (const [name, cmd] of Object.entries(required)) {
