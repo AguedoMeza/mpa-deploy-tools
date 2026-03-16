@@ -284,21 +284,32 @@ async function deployFrontend(config) {
 // ─── Deploy Backend ───────────────────────────────────────────────────────────
 
 async function deployBackend(config) {
+  const git      = simpleGit(REPO_ROOT)
+  const logEntry = await git.log({ maxCount: 1 })
+  const shortSha = logEntry.latest.hash.slice(0, 7)
+  const fullSha  = logEntry.latest.hash
+  const spFolder = config.deploy.storage.folder
+
   if (DRY_RUN) {
-    const git = simpleGit(REPO_ROOT)
-    const log_ = await git.log({ maxCount: 1 })
-    const commit = log_.latest?.hash?.slice(0, 7) ?? 'unknown'
-    log(`[BACKEND]  WOULD actualizar manifest.json → backend.commit = ${commit}`)
-    log(`[BACKEND]  WOULD señal: DeployWatcher hará git pull + nssm restart ${config.deploy.server.backend.nssm_service}`)
+    log(`[BACKEND] WOULD actualizar manifest.json → backend.commit = ${shortSha}`)
+    log(`[BACKEND] WOULD señal: watcher hará git pull + nssm restart ${config.deploy?.server?.backend?.nssm_service}`)
     return
   }
 
-  // TODO Fase 2: implementar señal real
-  // const git = simpleGit(REPO_ROOT)
-  // const log_ = await git.log({ maxCount: 1 })
-  // const commit = log_.latest.hash.slice(0, 7)
-  // await storage.updateManifest(projectName, { backend: { signal: 'pull', commit } })
-  log('[BACKEND] Fase 2 no implementada aún')
+  // Actualizar manifest.json con el commit actual — el watcher detecta el cambio y ejecuta git pull
+  const manifest = (await sp.getManifest(spFolder)) ?? { frontend: {}, backend: {} }
+
+  manifest.backend = {
+    commit:     fullSha,
+    short_sha:  shortSha,
+    timestamp:  new Date().toISOString(),
+    pushed_by:  process.env.GIT_AUTHOR_EMAIL ?? process.env.USERNAME ?? 'unknown',
+    git_ref:    `main@${shortSha}`,
+  }
+
+  await sp.putManifest(spFolder, manifest)
+  log(`[BACKEND] manifest.json actualizado → commit: ${shortSha}`)
+  log(`[BACKEND] ✓ Señal enviada — watcher ejecutará git pull + restart`)
 }
 
 // ─── Run ──────────────────────────────────────────────────────────────────────
