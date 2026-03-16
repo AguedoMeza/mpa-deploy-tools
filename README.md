@@ -140,6 +140,14 @@ projects:
 
 Para agregar una app nueva al watcher: añade una línea en `projects` y ejecuta `nssm restart mpa-deploy-watcher`.
 
+### Permisos de git en el servidor
+
+El watcher corre como `SYSTEM` (NSSM) pero los repos suelen ser propiedad del usuario que los clonó. Git bloqueará el `git pull` si los owners no coinciden. Ejecuta una vez en el servidor:
+
+```powershell
+git config --global --add safe.directory *
+```
+
 ### Actualizar el watcher tras cambios en este repo
 
 ```powershell
