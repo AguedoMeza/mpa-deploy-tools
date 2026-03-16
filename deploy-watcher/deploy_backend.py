@@ -39,10 +39,10 @@ def deploy_backend(config: dict, commit: str) -> bool:
     Retorna True si fue exitoso, False si se hizo rollback.
     """
     srv         = config["deploy"]["server"]["backend"]
-    repo_path   = srv["repo_path"]      # C:\inetpub\repos\app-legal-filling
-    service     = srv["nssm_service"]   # app-legal-filling-backend
-    hc_url      = srv["health_check"]["url"]
-    hc_timeout  = srv["health_check"].get("timeout_seconds", 10)
+    repo_path   = srv["repo_path"]
+    service     = srv["nssm_service"]
+    hc_url      = srv.get("health_check", {}).get("url", "")
+    hc_timeout  = srv.get("health_check", {}).get("timeout_seconds", 10)
 
     # 1. Guardar commit actual para rollback
     try:
@@ -66,7 +66,11 @@ def deploy_backend(config: dict, commit: str) -> bool:
     logger.info(f"[BACKEND] nssm restart '{service}'")
     subprocess.run(["nssm", "restart", service], check=True)
 
-    # 4. Health check
+    # 4. Health check (opcional)
+    if not hc_url:
+        logger.info(f"[BACKEND] ✓ Deploy exitoso (sin health check): commit {commit}")
+        return True
+
     logger.info(f"[BACKEND] Health check: {hc_url}")
     if _health_check(hc_url, hc_timeout):
         logger.info(f"[BACKEND] ✓ Deploy exitoso: commit {commit}")
