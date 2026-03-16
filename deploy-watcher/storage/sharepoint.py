@@ -60,9 +60,7 @@ class SharePointClient:
         site_path = os.environ["SHAREPOINT_SITE_PATH"]  # /sites/Apps Center
 
         url = f"{GRAPH_BASE}/sites/{site_url}:{site_path}"
-        res = requests.get(url, headers=self._headers(), timeout=30)
-        res.raise_for_status()
-
+        res = self._request("GET", url)
         self._site_id = res.json()["id"]
         logger.info(f"Site ID: {self._site_id}")
         return self._site_id
@@ -98,10 +96,9 @@ class SharePointClient:
         """Lee manifest.json desde SharePoint. Retorna None si no existe."""
         site_id = self._get_site_id()
         url = f"{GRAPH_BASE}/sites/{site_id}/drive/root:/{sp_folder}/manifest.json:/content"
-        res = requests.get(url, headers=self._headers(), timeout=30)
+        res = self._request("GET", url)
         if res.status_code == 404:
             return None
-        res.raise_for_status()
         return res.json()
 
     def download_file(self, sp_path: str, dest_path: str) -> None:
