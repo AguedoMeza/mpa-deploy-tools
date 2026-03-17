@@ -109,13 +109,19 @@ def check_project(project_cfg: dict) -> None:
         commit      = be_manifest.get("commit")
 
         if be_enabled and commit and commit != state.get("backend_commit"):
-            logger.info(f"Nuevo commit backend detectado: {commit}")
+            if commit == state.get("backend_commit_failed"):
+                logger.warning(f"Commit {commit[:7]} fallo anteriormente — esperando nuevo commit")
+            else:
+                logger.info(f"Nuevo commit backend detectado: {commit}")
 
-            ok = deploy_backend(project_cfg, commit)
-            if ok:
-                state["backend_commit"] = commit
+                ok = deploy_backend(project_cfg, commit)
+                if ok:
+                    state["backend_commit"] = commit
+                    state.pop("backend_commit_failed", None)
+                else:
+                    state["backend_commit_failed"] = commit
                 save_state(project_name, state)
-                logger.info(f"Estado guardado: backend={commit}")
+                logger.info(f"Estado guardado: backend={commit[:7]} ok={ok}")
 
     except Exception as e:
         logging.getLogger(project_name).error(f"Error en check_project: {e}", exc_info=True)
