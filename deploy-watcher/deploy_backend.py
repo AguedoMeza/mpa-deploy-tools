@@ -54,9 +54,15 @@ def deploy_backend(config: dict, commit: str) -> bool:
     logger.info(f"[BACKEND] Target commit: {commit}")
 
     # 2. Git pull
-    logger.info(f"[BACKEND] git pull en {repo_path}")
+    # Detectar la rama actual del repo en el servidor
     try:
-        out = _git(repo_path, "pull", "origin", "main")
+        branch = _git(repo_path, "rev-parse", "--abbrev-ref", "HEAD")
+    except Exception:
+        branch = "main"
+
+    logger.info(f"[BACKEND] git pull en {repo_path} (rama: {branch})")
+    try:
+        out = _git(repo_path, "pull", "origin", branch)
         logger.info(f"[BACKEND] {out}")
     except subprocess.CalledProcessError as e:
         logger.error(f"[BACKEND] git pull falló: {e.stderr}")
