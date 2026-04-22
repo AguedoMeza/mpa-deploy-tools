@@ -174,8 +174,11 @@ async function main() {
   const frontendChanged = frontendEnabled && frontendPath &&
     changedFiles.some(f => f.startsWith(frontendPath))
 
-  const backendChanged = backendEnabled && backendPath &&
-    changedFiles.some(f => f.startsWith(backendPath))
+  const backendChanged = backendEnabled && backendPath && (
+    backendPath === '.'
+      ? changedFiles.some(f => !frontendPath || !f.startsWith(frontendPath))
+      : changedFiles.some(f => f.startsWith(backendPath))
+  )
 
   if (!frontendChanged && !backendChanged) {
     log('Cambios no afectan frontend ni backend configurados — skipping')
