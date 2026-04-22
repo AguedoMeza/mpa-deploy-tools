@@ -54,11 +54,13 @@ def deploy_backend(config: dict, commit: str) -> bool:
     logger.info(f"[BACKEND] Target commit: {commit}")
 
     # 2. Git pull
-    # Detectar la rama actual del repo en el servidor
-    try:
-        branch = _git(repo_path, "rev-parse", "--abbrev-ref", "HEAD")
-    except Exception:
-        branch = "main"
+    # Usar rama del config si está definida, si no auto-detectar del repo local
+    branch = srv.get("branch") or None
+    if not branch:
+        try:
+            branch = _git(repo_path, "rev-parse", "--abbrev-ref", "HEAD")
+        except Exception:
+            branch = "main"
 
     logger.info(f"[BACKEND] git pull en {repo_path} (rama: {branch})")
     try:
